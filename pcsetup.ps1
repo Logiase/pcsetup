@@ -118,7 +118,8 @@ $WingetApps = @(
     "Microsoft.PowerToys",
     "Microsoft.PowerShell",
     "Google.Chrome",
-    "SomePythonThings.WingetUIStore"
+    "SomePythonThings.WingetUIStore",
+    "ZeroTier.ZeroTierOne"
 )
 foreach ($item in $WingetApps) {
     Install-WingetApp -PackageID "$item"
