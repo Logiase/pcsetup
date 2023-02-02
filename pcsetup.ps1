@@ -1,3 +1,5 @@
+$VerbosePreference = "Continue"
+
 function Install-ScoopApp {
     param (
         [string]$Package
@@ -105,8 +107,13 @@ $ScoopApps = @(
     "busybox",
     "cacert",
     "sudo",
+    
     "python",
-    "ffmpeg",
+    "go",
+    # "nodejs-lts"
+    
+    # "ffmpeg",
+    # "obs-studio"
     # "wingetui",
     "neovim"
 )
@@ -115,10 +122,18 @@ foreach ($item in $ScoopApps) {
 }
 
 $WingetApps = @(
+    "Microsoft.DotNet.DesktopRuntime.3_1",
+    "Microsoft.DotNet.DesktopRuntime.5",
+    "Microsoft.DotNet.DesktopRuntime.6",
+    "Microsoft.DotNet.DesktopRuntime.7",
+    "Microsoft.WindowsTerminal",
     "Microsoft.PowerToys",
     "Microsoft.PowerShell",
+    
     "Google.Chrome",
+    
     "SomePythonThings.WingetUIStore",
+    
     "ZeroTier.ZeroTierOne",
     "Fndroid.ClashForWindows"
 )
