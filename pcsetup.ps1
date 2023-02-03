@@ -1,109 +1,125 @@
 param (
-    [switch]$InstallOpenSSHServer = $false,
-    [switch]$InstallWSL = $false
+    [switch] $InstallOpenSSHServer = $false,
+    [switch] $InstallWSL = $false
 )
 
-$InformationPreference = "Continue"
+function Update-Scoop {
+    Write-Host "Update Scoop"
+    scoop update
+}
 
 function Enable-ScoopBucket {
-    param (
-        [string] $Bucket
-    )
+    param ( [string] $Bucket )
 
-    Write-Information "Enabling scoop bucket $Bucket"
+    Write-Host "Enable Scoop Bucket $Bucket"
     scoop bucket add $Bucket
 }
 
 function Install-ScoopApps {
-    param (
-        [string[]] $Apps
-    )
+    param ( [string[]] $Apps )
 
-    Write-Information "Updating scoop..."
-    scoop update
-
-    Write-Information "Installing Apps $Apps..."
+    Write-Host "Install Scoop Apps $Apps"
     scoop install $Apps
 }
 
-function Install-WingetApp {
-    param (
-        [string]$PackageID
-    )
-
-    Write-Information -Message "Installing Apps $PackageID"
-    winget install --silent --id "$PackageID" --accept-source-agreements --accept-package-agreements
+function Update-WinGet {
+    Write-Host "Update WinGet"
+    winget source update
 }
 
-Write-Information "Starting PC setup script..."
-Write-Information "Setting PowerShell Execution Policy to RemoteSigned..."
-if ((Get-ExecutionPolicy -Scope CurrentUser) -notcontains "RemoteSigned") {
-    Start-Process -FilePath "PowerShell" -ArgumentList "Set-ExecutionPolicy", "RemoteSigned", "-Scope", "CurrentUser" -Verb RunAs -Wait
-    Write-Output "Need to restart/re-run to refresh Execution Policy"
-    Start-Sleep -Seconds 10
-    Break
-}
-else {
-    Write-Information "Execution Policy alread set to RemoteSigned, skipping."
-}
+function Install-WinGetApps {
+    param ( [string[]] $Apps )
 
-Write-Information "Installing OpenSSH..."
-if ((Get-WindowsCapability -Online -Name 'OpenSSH.Client*').State -ne "Installed") {
-    Write-Information "Installing OpenSSH.Client..."
-    $Name = (Get-WindowsCapability -Online -Name 'OpenSSH.Client*').Name
-    Add-WindowsCapability -Online -Name $Name
-}
-else {
-    Write-Information "OpenSSH.Client Already Installed, skipping."
-}
-if ($InstallOpenSSHServer) {
-    if ((Get-WindowsCapability -Online -Name 'OpenSSH.Server*').State -ne "Installed") {
-        Write-Information "Installing OpenSSH.Server..."
-        $Name = (Get-WindowsCapability -Online -Name 'OpenSSH.Server*').Name
-        Add-WindowsCapability -Online -Name $Name
-
-        Write-Information "Starting OpenSSH.Server..."
-        if (!(Get-Service -Name 'sshd' -ErrorAction)) {
-            Write-Information "Service sshd not found!!!"
-        }
-        else {
-            if ((Get-Service -Name 'sshd').Status -ne "Running") {
-                Write-Information "Starting Service sshd..."
-                Start-Service sshd
-            }
-            else {
-                Write-Information "Service sshd already started."
-            }
-
-            Set-Service -Name sshd -StartupType Automatic
-
-            Write-Information "Checking sshd firewall rule..."
-            if (!(Get-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -ErrorAction SilentlyContinue | Select-Object Name, Enabled)) {
-                Write-Information "Firewall Rule 'OpenSSH-Server-In-TCP' does not exist, creating it..."
-                New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22
-            }
-            else {
-                Write-Information "Firewall rule 'OpenSSH-Server-In-TCP' has been created and exists."
-            }
-        }
+    Write-Host "Install WinGet Apps $Apps"
+    $Packages = @()
+    foreach ($App in $Apps) {
+        $Packages += @{PackageIdentifier = $App }
     }
-    else {
-        Write-Information "OpenSSH.Server Already Installed, skipping."
+    $Source = winget source export winget | ConvertFrom-Json
+    $Argument = $Source.Arg
+    $Source.PSObject.Properties.Remove('Data')
+    $Source.PSObject.Properties.Remove('Arg')
+    $Source | Add-Member -MemberType NoteProperty -Name Argument -Value $Argument
+    $JsonStr = @{"`$schema" = "https://aka.ms/winget-packages.schema.2.0.json"; Sources = @(@{Packages = $Packages ; SourceDetails = $Source }) } | ConvertTo-Json -Compress -Depth 5
+    $JsonStr > $env:TEMP\wingetapps.json
+
+    winget import $env:TEMP\wingetapps.json
+    Remove-Item -Path $env:TEMP\wingetapps.json -Force
+}
+
+function Install-OpenSSH {
+    param ( [bool] $InstallServer = $false)
+
+    Write-Host "Installing OpenSSH Client"
+    if ($InstallServer) {
+        Write-Host "Installing OpenSSH Server"
+    }
+
+    @"
+function InstallClient {
+    `$OpenSSHClient = Get-WindowsCapability -Online -Name OpenSSH.Client*
+    if (`$OpenSSHClient.State -ne 'Installed') {
+        Add-WindowsCapability -Online -Name `$OpenSSHClient.Name
     }
 }
 
+function InstallServer {
+    `$OpenSSHServer = Get-WindowsCapability -Online -Name OpenSSH.Server*
+    if (`$OpenSSHServer.State -ne 'Installed') {
+        Add-WindowsCapability -Online -Name `$OpenSSHServer.Name
+    }
+
+    `$SSHDService = Get-Service -Name sshd -ErrorAction Break
+    if (`$SSHDService.Status -ne 'Running') {
+        Start-Service sshd
+    }
+    Set-Service -Name sshd -StartupType Automatic
+
+    if (!(Get-FirewallRule -Name 'OpenSSH-Server-In-TCP' -ErrorAction SilentContinue | Select-Object Name, Enabled)) {
+        New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22
+    }
+}
+
+InstallClient
+if ($InstallServer) { InstallServer }
+
+"@ > $env:TEMP/install_openssh.ps1
+    Start-Process -FilePath 'powershell' -ArgumentList $env:TEMP/install_openssh_client.ps1 -Verb RunAs -Wait -WindowStyle Hidden
+    Remove-Item -Path $env:TEMP/install_openssh.ps1 -Force
+}
+
+function Install-Scoop {
+    Invoke-RestMethod get.scoop.sh | Invoke-Expression
+}
+
+function Install-WSL {
+    Start-Process -FilePath powershell -ArgumentList 'wsl', '--install', '--no-distribution' -Verb RunAs -Wait -WindowStyle Hidden
+    Scoop-InstallApps -Apps archwsl
+}
+
+Write-Host 'Starting PC setup script'
+
+if ((Get-ExecutionPolicy -Scope CurrentUser) -ne 'RemoteSigned') {
+    Write-Host 'Set PowerShell Execution Policy to RemoteSigned'
+    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+}
+
+Install-OpenSSH -InstallServer $InstallOpenSSHServer
 if (!(Get-Command -Name 'scoop' -ErrorAction SilentlyContinue)) {
-    Write-Information 'Installing scoop...'
-    irm get.scoop.sh | iex
+    Write-Host 'Installing Scoop'
+    Install-Scoop
+}
+else {
+    Write-Host "Scoop already installed"
 }
 
-Write-Information 'Installing refreshenv and git first...'
-Install-ScoopApps -Apps refreshenv, git
-Start-Sleep -Seconds 5
+Install-ScoopApps -Apps git
+Enable-ScoopBucket -Bucket "extras"
+Update-Scoop
+Install-ScoopApps -Apps refreshenv
 refreshenv
-Start-Sleep -Seconds 5
 
-Write-Information "Configuring git..."
+Write-Host 'Confiurating git'
 if (!$(git config --global credential.helper) -eq "manager-core") {
     git config --global credential.help manager-core
 }
@@ -112,7 +128,7 @@ if (!($env:GIT_SSH)) {
     [System.Environment]::SetEnvironmentVariable('GIT_SSH', (Resolve-Path (scoop which ssh)), 'USER')
 }
 
-Write-Information "Using aria2 for scoop..."
+Write-Host 'Use aria2 for scoop'
 Install-ScoopApps -Apps aria2
 if (!$(scoop config aria2-enabled) -eq $true) {
     scoop config aria2-enabled true
@@ -121,12 +137,39 @@ if (!$(scoop config aria2-warning-enabled) -eq $false) {
     scoop config aria2-warning-enabled false
 }
 
-Enable-ScoopBucket -Bucket "extras"
+$ScoopApps = @(
+    'curl',
+    'python',
+    'neovim',
+    'sudo',
+    'busybox'
+)
+Install-ScoopApps -Apps $ScoopApps
 
+$WinGetApps = @(
+    'Microsoft.DotNet.DesktopRuntime.3_1',
+    'Microsoft.DotNet.DesktopRuntime.5',
+    'Microsoft.DotNet.DesktopRuntime.6',
+    'Microsoft.DotNet.DesktopRuntime.7',
+    'Microsoft.WindowsTerminal',
+    'Microsoft.PowerToys',
+    'Microsoft.PowerShell',
+    'Microsoft.Teams',
+
+    'Google.Chrome',
+
+    'SomePythonTings.WingetUIStore',
+    
+    'Fndroid.ClashForWindows',
+    'ZeroTier.ZeroTierOne'
+)
+Install-WinGetApps -Apps $WinGetApps
+
+Write-Host 'Installing VSCode'
 winget install Microsoft.VisualStudioCode --override '/SILENT /mergetasks="!runcode,addcontextmenufiles,addcontextmenufolders"'
 
-if ($InstallWSL) {
+if ($InstallWSL -and (Get-Command -Name 'wsl')) {
     Write-Information "Installing WSL..."
-    wsl --install --no-distribution
-
+    
+    Install-WSL
 }
