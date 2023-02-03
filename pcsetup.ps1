@@ -40,7 +40,7 @@ function Install-WinGetApps {
     $Source.PSObject.Properties.Remove('Data')
     $Source.PSObject.Properties.Remove('Arg')
     $Source | Add-Member -MemberType NoteProperty -Name Argument -Value $Argument
-    $JsonStr = @{"`$schema" = "https://aka.ms/winget-packages.schema.2.0.json"; Sources = @(@{Packages = $Packages ; SourceDetails = $Source }) } | ConvertTo-Json -Compress -Depth 5
+    $JsonStr = @{"`$schema" = "https://aka.ms/winget-packages.schema.2.0.json"; Sources = @(@{Packages = $Packages ; SourceDetails = $Source }) } | ConvertTo-Json -Depth 5
     $JsonStr > $env:TEMP\wingetapps.json
 
     winget import $env:TEMP\wingetapps.json
@@ -146,6 +146,7 @@ $ScoopApps = @(
 )
 Install-ScoopApps -Apps $ScoopApps
 
+Update-WinGet
 $WinGetApps = @(
     'Microsoft.DotNet.DesktopRuntime.3_1',
     'Microsoft.DotNet.DesktopRuntime.5',
@@ -158,7 +159,7 @@ $WinGetApps = @(
 
     'Google.Chrome',
 
-    'SomePythonTings.WingetUIStore',
+    'SomePythonThings.WingetUIStore',
     
     'Fndroid.ClashForWindows',
     'ZeroTier.ZeroTierOne'
