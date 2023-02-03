@@ -53,6 +53,8 @@ if (!(Get-Command -Name "scoop" -CommandType Application -ErrorAction SilentlyCo
     irm get.scoop.sh | iex
 }
 
+# Install Winget
+
 # Install OpenSSH.Client on Windows 10+
 @'
 if ((Get-WindowsCapability -Online -Name OpenSSH.Client*).State -ne "Installed) {
@@ -91,6 +93,7 @@ if (!$(scoop config aria2-warning-enabled) -eq $false) {
 }
 
 Enable-ScoopBucket -Bucket "extras"
+Enable-ScoopBucket -Bucket "nerd-fonts"
 
 # UNIX Tools
 Write-Verbose -Message "Removing curl Alias..."
@@ -103,7 +106,7 @@ if (!($Env:TERM)) {
 }
 
 $ScoopApps = @(
-    "curl"
+    # "curl"
     "busybox",
     "cacert",
     "sudo",
@@ -127,10 +130,12 @@ $WingetApps = @(
     "Microsoft.DotNet.DesktopRuntime.6",
     "Microsoft.DotNet.DesktopRuntime.7",
     "Microsoft.WindowsTerminal",
+    "Microsoft.Edge",
+    "Microsoft.Teams",
     "Microsoft.PowerToys",
     "Microsoft.PowerShell",
     
-    "Google.Chrome",
+    # "Google.Chrome",
     
     "SomePythonThings.WingetUIStore",
     
@@ -149,3 +154,5 @@ if (!$wslInstalled) {
     Start-Process -FilePath "PowerShell" -ArgumentList "wsl", "--install", "--no-distribution" -Verb RunAs -Wait -WindowStyle Hidden
 }
 Install-ScoopApp -Package archwsl
+
+# install my powershell configurations
